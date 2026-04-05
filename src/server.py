@@ -11,6 +11,8 @@ from pathlib import Path
 
 import numpy as np
 import uvicorn
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
@@ -40,7 +42,6 @@ SYSTEM_PROMPT = (
 
 SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
 
-app = FastAPI()
 engine = None
 tts_backend = None
 
@@ -60,6 +61,15 @@ def load_models():
     tts_backend = tts.load()
 
 
+@asynccontextmanager
+async def lifespan(app):
+    await asyncio.get_event_loop().run_in_executor(None, load_models)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+
 def save_temp(data: bytes, suffix: str) -> str:
     tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
     tmp.write(data)
@@ -71,11 +81,6 @@ def split_sentences(text: str) -> list[str]:
     """Split text into sentences for streaming TTS."""
     parts = SENTENCE_SPLIT_RE.split(text.strip())
     return [s.strip() for s in parts if s.strip()]
-
-
-@app.on_event("startup")
-async def startup():
-    await asyncio.get_event_loop().run_in_executor(None, load_models)
 
 
 @app.get("/")
