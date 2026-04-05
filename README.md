@@ -39,7 +39,7 @@ Browser (playback + transcript)
 ## Requirements
 
 - Python 3.12+
-- macOS with Apple Silicon, or Linux with a supported GPU (not tested)
+- macOS with Apple Silicon, or Linux with a supported GPU
 - ~3 GB free RAM for the model
 
 ## Quick start
