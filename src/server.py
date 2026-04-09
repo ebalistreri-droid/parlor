@@ -20,6 +20,8 @@ import tts
 HF_REPO = "litert-community/gemma-4-E2B-it-litert-lm"
 HF_FILENAME = "gemma-4-E2B-it.litertlm"
 
+WIKI_PATH = Path(os.environ.get("WIKI_PATH", Path.home() / "assistente-wiki"))
+
 
 def resolve_model_path() -> str:
     path = os.environ.get("MODEL_PATH", "")
@@ -30,13 +32,39 @@ def resolve_model_path() -> str:
     return hf_hub_download(repo_id=HF_REPO, filename=HF_FILENAME)
 
 
+def build_system_prompt() -> str:
+    """Build system prompt injecting wiki context if available."""
+    def read_wiki(rel: str) -> str:
+        try:
+            return (WIKI_PATH / "wiki" / rel).read_text()
+        except FileNotFoundError:
+            return ""
+
+    profilo = read_wiki("me/profilo.md")
+    preferenze = read_wiki("me/preferenze.md")
+    index = read_wiki("index.md")
+
+    prompt = (
+        "Sei l'assistente vocale personale di Emanuele Balistreri. "
+        "L'utente ti parla tramite microfono e può mostrarti la fotocamera. "
+        "Parla sempre in italiano, con tono diretto e conciso. "
+        "DEVI sempre usare il tool respond_to_user per rispondere: "
+        "prima trascrivi esattamente cosa ha detto l'utente, poi scrivi la risposta."
+    )
+
+    if profilo or index:
+        prompt += "\n\n## Contesto personale\n"
+        if profilo:
+            prompt += f"\n### Profilo\n{profilo}\n"
+        if preferenze:
+            prompt += f"\n### Preferenze\n{preferenze}\n"
+        if index:
+            prompt += f"\n### Indice wiki\n{index}\n"
+
+    return prompt
+
+
 MODEL_PATH = resolve_model_path()
-SYSTEM_PROMPT = (
-    "You are a friendly, conversational AI assistant. The user is talking to you "
-    "through a microphone and showing you their camera. "
-    "You MUST always use the respond_to_user tool to reply. "
-    "First transcribe exactly what the user said, then write your response."
-)
 
 SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
 
@@ -98,7 +126,7 @@ async def websocket_endpoint(ws: WebSocket):
         return "OK"
 
     conversation = engine.create_conversation(
-        messages=[{"role": "system", "content": SYSTEM_PROMPT}],
+        messages=[{"role": "system", "content": build_system_prompt()}],
         tools=[respond_to_user],
     )
     conversation.__enter__()
